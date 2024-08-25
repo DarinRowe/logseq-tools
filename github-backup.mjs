@@ -5,15 +5,43 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-// Function to log messages with timestamps
-function log(message) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${message}`);
+// Define log levels
+const LogLevel = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3,
+};
+
+// Convert string log level to numeric value
+function getLogLevelValue(level) {
+  switch (level.toLowerCase()) {
+    case "debug":
+      return LogLevel.DEBUG;
+    case "info":
+      return LogLevel.INFO;
+    case "warn":
+      return LogLevel.WARN;
+    case "error":
+    default:
+      return LogLevel.ERROR;
+  }
+}
+
+// Set default log level
+let currentLogLevel = LogLevel.INFO;
+
+// Function to log messages with timestamps and log levels
+function log(level, message) {
+  if (getLogLevelValue(level) <= currentLogLevel) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+  }
 }
 
 // Function to handle errors and exit the process
 function handleError(message, error, exitCode = 1) {
-  log(`ERROR: ${message}`);
+  log("ERROR", message);
   if (error) console.error(error);
   process.exit(exitCode);
 }
@@ -26,6 +54,7 @@ function validateConfig(config) {
       throw new Error(`Missing required config field: ${field}`);
     }
   }
+  log("INFO", "Configuration validated successfully");
 }
 
 // Read and validate the configuration file
@@ -33,6 +62,14 @@ let config;
 try {
   config = JSON.parse(await fs.readFile("config.json", "utf8"));
   validateConfig(config);
+
+  // Set log level from config
+  if (config.logLevel) {
+    currentLogLevel = getLogLevelValue(config.logLevel);
+    log("INFO", `Log level set to ${config.logLevel.toUpperCase()}`);
+  }
+
+  log("INFO", "Configuration file read and validated");
 } catch (error) {
   handleError("Error reading or validating config file:", error);
 }
@@ -40,9 +77,10 @@ try {
 // Function to execute shell commands with timeout
 async function runCommand(command, timeout = 30000) {
   try {
+    log("DEBUG", `Executing command: ${command}`);
     const { stdout, stderr } = await execAsync(command, { timeout });
-    if (stdout) log(stdout);
-    if (stderr) log(`STDERR: ${stderr}`);
+    if (stdout) log("DEBUG", `Command output: ${stdout.trim()}`);
+    if (stderr) log("WARN", `Command stderr: ${stderr.trim()}`);
     return stdout.trim();
   } catch (error) {
     if (error.code === "ETIMEDOUT") {
@@ -57,10 +95,12 @@ async function runCommand(command, timeout = 30000) {
 async function gitOperation(operation, maxRetries = 3) {
   for (let i = 0; i < maxRetries; i++) {
     try {
+      log("DEBUG", `Attempting Git operation: ${operation} (attempt ${i + 1}/${maxRetries})`);
       await runCommand(operation);
+      log("INFO", `Git operation successful: ${operation}`);
       return;
     } catch (error) {
-      log(`Git operation failed (attempt ${i + 1}/${maxRetries}): ${operation}`);
+      log("WARN", `Git operation failed (attempt ${i + 1}/${maxRetries}): ${operation}`);
       if (i === maxRetries - 1) throw error;
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before retrying
     }
@@ -72,13 +112,18 @@ async function clearDirectory(dir) {
   const preserveFiles = [".git", "README.md", ".gitignore"];
   const entries = await fs.readdir(dir);
 
+  log("INFO", `Clearing directory: ${dir}`);
   for (const entry of entries) {
-    if (preserveFiles.includes(entry)) continue; // Preserve specified files
+    if (preserveFiles.includes(entry)) {
+      log("DEBUG", `Preserving file: ${entry}`);
+      continue;
+    }
     const fullPath = path.join(dir, entry);
     await fs.remove(fullPath);
+    log("DEBUG", `Removed: ${fullPath}`);
   }
 
-  log(`Cleared directory: ${dir} (preserved ${preserveFiles.join(", ")})`);
+  log("INFO", `Cleared directory: ${dir} (preserved ${preserveFiles.join(", ")})`);
 }
 
 // Function to ensure .gitignore file exists with correct content
@@ -88,7 +133,7 @@ async function ensureGitignore(dir) {
 
   try {
     if (await fs.pathExists(gitignorePath)) {
-      // If .gitignore exists, ensure it contains the required content
+      log("DEBUG", "Updating existing .gitignore file");
       const currentContent = await fs.readFile(gitignorePath, "utf8");
       const updatedContent =
         Array.from(new Set([...currentContent.split("\n"), ...gitignoreContent.split("\n")]))
@@ -96,11 +141,11 @@ async function ensureGitignore(dir) {
           .join("\n") + "\n";
 
       await fs.writeFile(gitignorePath, updatedContent);
-      log(".gitignore file updated");
+      log("INFO", ".gitignore file updated");
     } else {
-      // If .gitignore doesn't exist, create it
+      log("DEBUG", "Creating new .gitignore file");
       await fs.writeFile(gitignorePath, gitignoreContent);
-      log(".gitignore file created");
+      log("INFO", ".gitignore file created");
     }
   } catch (error) {
     handleError("Error managing .gitignore file:", error);
@@ -113,6 +158,11 @@ async function backupAndPush() {
   const backupDir = config.backupPath;
   const githubRepo = config.githubRepo;
 
+  log("INFO", "Starting backup process");
+  log("DEBUG", `Source directory: ${sourceDir}`);
+  log("DEBUG", `Backup directory: ${backupDir}`);
+  log("DEBUG", `GitHub repository: ${githubRepo}`);
+
   // Check if source directory exists
   if (!(await fs.pathExists(sourceDir))) {
     handleError(`Source directory does not exist: ${sourceDir}`);
@@ -121,6 +171,7 @@ async function backupAndPush() {
   // Ensure backup directory exists
   try {
     await fs.ensureDir(backupDir);
+    log("INFO", `Backup directory ensured: ${backupDir}`);
   } catch (error) {
     handleError(`Error creating backup directory: ${backupDir}`, error);
   }
@@ -145,8 +196,9 @@ async function backupAndPush() {
 
   // Copy files from source to backup directory
   try {
+    log("INFO", "Copying files from source to backup directory");
     await fs.copy(sourceDir, backupDir, copyOptions);
-    log("Files copied successfully");
+    log("INFO", "Files copied successfully");
   } catch (error) {
     handleError("Error copying files:", error);
   }
@@ -156,16 +208,17 @@ async function backupAndPush() {
 
   // Change to backup directory
   process.chdir(backupDir);
+  log("DEBUG", `Changed working directory to: ${backupDir}`);
 
   // Check if it's already a Git repository
   const isGitRepo = await fs.pathExists(path.join(backupDir, ".git"));
 
   if (!isGitRepo) {
-    log("Initializing Git repository");
+    log("INFO", "Initializing new Git repository");
     await gitOperation("git init");
     await gitOperation(`git remote add origin ${githubRepo}`);
   } else {
-    log("Updating existing Git repository");
+    log("INFO", "Updating existing Git repository");
     await gitOperation(`git remote set-url origin ${githubRepo}`);
     await gitOperation("git fetch origin");
     await gitOperation("git checkout main || git checkout -b main");
@@ -173,42 +226,46 @@ async function backupAndPush() {
 
   // Check if remote repository is accessible
   try {
+    log("INFO", "Checking remote repository accessibility");
     await runCommand("git ls-remote --exit-code --heads origin main", 10000);
+    log("INFO", "Remote repository is accessible");
   } catch (error) {
     handleError("Error accessing remote repository. Please check your GitHub credentials and repository URL.", error);
   }
 
   // Check for changes
+  log("INFO", "Checking for changes");
   const status = await runCommand("git status --porcelain");
 
   if (status) {
-    log("Changes detected. Proceeding with commit and push.");
+    log("INFO", "Changes detected. Proceeding with commit and push.");
     await gitOperation("git add .");
     const date = new Date().toISOString();
     await gitOperation(`git commit -m "Backup: ${date}"`);
     try {
+      log("INFO", "Pushing changes to remote repository");
       await gitOperation("git push -u origin main");
-      log("Backup and push completed successfully");
+      log("INFO", "Backup and push completed successfully");
     } catch (error) {
-      log("Error pushing to remote repository:");
+      log("ERROR", "Error pushing to remote repository:");
       console.error(error);
-      log("Changes are committed locally. Please push manually when possible.");
+      log("WARN", "Changes are committed locally. Please push manually when possible.");
     }
   } else {
-    log("No changes detected. Skipping commit and push.");
+    log("INFO", "No changes detected. Skipping commit and push.");
   }
 }
 
 // Cleanup function to be called on script exit
 async function cleanup() {
   // Add any cleanup operations here
-  log("Cleanup completed");
+  log("INFO", "Cleanup completed");
 }
 
 // Set up event listeners for script exit and interruption
 process.on("exit", cleanup);
 process.on("SIGINT", () => {
-  log("Script interrupted");
+  log("WARN", "Script interrupted");
   cleanup();
   process.exit(2);
 });
