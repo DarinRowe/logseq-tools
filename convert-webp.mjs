@@ -36,14 +36,14 @@ function getLogLevelValue(level) {
   }
 }
 
-// Set default log level from the configuration file
-let currentLogLevel = getLogLevelValue(config.logLevel || "error");
+// Set default log level
+let currentLogLevel = LogLevel.INFO;
 
-// Logging function
+// Function to log messages with timestamps and log levels
 function log(level, message) {
-  if (level <= currentLogLevel) {
-    const prefix = Object.keys(LogLevel)[level];
-    console.log(`[${prefix}] ${message}`);
+  if (getLogLevelValue(level) <= currentLogLevel) {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
   }
 }
 

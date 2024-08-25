@@ -3,19 +3,17 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 
-const SCRIPT_DIR = "/path/to/your/script/directory";
+// Get the current project directory
+const SCRIPT_DIR = process.cwd();
 
-// 检查脚本目录是否存在
-async function checkScriptDir() {
-  try {
-    await fs.access(SCRIPT_DIR);
-  } catch (error) {
-    console.error(`Error: Script directory does not exist: ${SCRIPT_DIR}`);
-    process.exit(1);
-  }
+// Read the configuration file
+async function readConfig() {
+  const configPath = path.join(SCRIPT_DIR, "config.json");
+  const configData = await fs.readFile(configPath, "utf8");
+  return JSON.parse(configData);
 }
 
-// 获取当前的crontab内容
+// Get the current crontab content
 function getCurrentCrontab() {
   try {
     return execSync("crontab -l", { encoding: "utf8" });
@@ -24,39 +22,44 @@ function getCurrentCrontab() {
   }
 }
 
-// 更新cron任务
-function updateCron(crontab, job, schedule, command) {
+// Update or add a cron job
+function updateCron(crontab, job) {
   const lines = crontab.split("\n");
-  const jobRegex = new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const jobRegex = new RegExp(job.command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const fullCommand = `/usr/local/bin/node ${path.join(SCRIPT_DIR, job.command)} >> ${path.join(
+    SCRIPT_DIR,
+    "logs",
+    `${job.name}.log`
+  )} 2>&1`;
   const index = lines.findIndex((line) => jobRegex.test(line));
 
   if (index !== -1) {
-    lines[index] = `${schedule} ${command}`;
-    console.log(`Updated existing cron job: ${job}`);
+    lines[index] = `${job.schedule} ${fullCommand}`;
+    console.log(`Updated existing cron job: ${job.name}`);
   } else {
-    lines.push(`${schedule} ${command}`);
-    console.log(`Added new cron job: ${job}`);
+    lines.push(`${job.schedule} ${fullCommand}`);
+    console.log(`Added new cron job: ${job.name}`);
   }
 
   return lines.join("\n");
 }
 
-// 删除cron任务
-function deleteCron(crontab, job, command) {
+// Delete a cron job
+function deleteCron(crontab, job) {
   const lines = crontab.split("\n");
-  const jobRegex = new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const jobRegex = new RegExp(job.command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const filteredLines = lines.filter((line) => !jobRegex.test(line));
 
   if (filteredLines.length < lines.length) {
-    console.log(`Deleted cron job: ${job}`);
+    console.log(`Deleted cron job: ${job.name}`);
   } else {
-    console.log(`Cron job not found: ${job}`);
+    console.log(`Cron job not found: ${job.name}`);
   }
 
   return filteredLines.join("\n");
 }
 
-// 应用新的crontab
+// Apply the new crontab
 async function applyCrontab(crontab) {
   const tempFile = path.join(os.tmpdir(), "temp_crontab");
   await fs.writeFile(tempFile, crontab);
@@ -64,7 +67,7 @@ async function applyCrontab(crontab) {
   await fs.unlink(tempFile);
 }
 
-// 显示使用说明
+// Display usage instructions
 function showUsage() {
   console.log("Usage: node manage_cron_jobs.mjs [options]");
   console.log("Options:");
@@ -73,59 +76,65 @@ function showUsage() {
   console.log("  -h, --help    Show this help message");
 }
 
-async function main() {
-  await checkScriptDir();
+// Ensure the log directory exists
+async function ensureLogDirectory() {
+  const logDir = path.join(SCRIPT_DIR, "logs");
+  await fs.mkdir(logDir, { recursive: true });
+}
 
+async function main() {
+  // Ensure the log directory exists
+  await ensureLogDirectory();
+
+  // Read the configuration
+  const config = await readConfig();
+
+  // Parse command line arguments
   const args = process.argv.slice(2);
   const option = args[0];
 
+  // Get the current crontab
   let crontab = getCurrentCrontab();
 
+  // Process based on the provided option
   switch (option) {
     case "-a":
     case "--add":
-      crontab = updateCron(
-        crontab,
-        "github-backup",
-        "0 * * * *",
-        `/usr/local/bin/node ${SCRIPT_DIR}/github-backup.mjs >> /tmp/logseq-backup.log 2>&1`
-      );
-      crontab = updateCron(
-        crontab,
-        "convert-webp",
-        "0 2 * * *",
-        `/usr/local/bin/node ${SCRIPT_DIR}/convert-webp.mjs >> /tmp/convert-webp.log 2>&1`
-      );
-      crontab = updateCron(
-        crontab,
-        "clean-empty-notes",
-        "0 3 * * 0",
-        `/usr/local/bin/node ${SCRIPT_DIR}/clean-empty-notes.mjs >> /tmp/clean-notes.log 2>&1`
-      );
+      // Add or update cron jobs
+      for (const job of config.cronJobs) {
+        crontab = updateCron(crontab, job);
+      }
       break;
     case "-d":
     case "--delete":
-      crontab = deleteCron(crontab, "github-backup", `/usr/local/bin/node ${SCRIPT_DIR}/github-backup.mjs`);
-      crontab = deleteCron(crontab, "convert-webp", `/usr/local/bin/node ${SCRIPT_DIR}/convert-webp.mjs`);
-      crontab = deleteCron(crontab, "clean-empty-notes", `/usr/local/bin/node ${SCRIPT_DIR}/clean-empty-notes.mjs`);
+      // Delete cron jobs
+      for (const job of config.cronJobs) {
+        crontab = deleteCron(crontab, job);
+      }
       break;
     case "-h":
     case "--help":
     case undefined:
+      // Show usage instructions
       showUsage();
       return;
     default:
+      // Handle invalid options
       console.error(`Invalid option: ${option}`);
       showUsage();
       process.exit(1);
   }
 
+  // Apply the updated crontab
   await applyCrontab(crontab);
   console.log("Cron jobs have been updated successfully.");
+
+  // Display the current crontab contents
   console.log("Current crontab contents:");
   console.log(getCurrentCrontab());
 }
 
+// Run the main function and handle any errors
 main().catch((error) => {
   console.error("An error occurred:", error);
   process.exit(1);

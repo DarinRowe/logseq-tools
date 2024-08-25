@@ -1,16 +1,23 @@
 {
-  "name": "logseq",
+  "name": "logseq-tools",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A collection of scripts to backup and manage a Logseq database",
   "scripts": {
     "convert-images": "node convert-webp.mjs",
     "github-backup": "node github-backup.mjs",
-    "clean-notes": "node clean-empty-notes.mjs"
+    "clean-notes": "node clean-empty-notes.mjs",
+    "cron-a": "node manage_cron_jobs.mjs -a",
+    "cron-d": "node manage_cron_jobs.mjs -d",
+    "cron-h": "node manage_cron_jobs.mjs -h"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "logseq",
+    "backup",
+    "cron",
+    "jobs"
+  ],
+  "author": "Darin Rowe",
+  "license": "MIT",
   "dependencies": {
     "fs-extra": "^11.2.0",
     "sharp": "^0.33.5",
