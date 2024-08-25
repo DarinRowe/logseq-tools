@@ -5,7 +5,7 @@ import trash from "trash";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
-// 读取配置文件
+// Read configuration file
 const config = JSON.parse(await fs.readFile("config.json", "utf8"));
 
 const supportedImageFormats = [".jpg", ".jpeg", ".png", ".tiff", ".gif"];
@@ -13,7 +13,7 @@ const supportedImageFormats = [".jpg", ".jpeg", ".png", ".tiff", ".gif"];
 let processedMdFiles = 0;
 let processedImages = 0;
 
-// 定义日志级别
+// Define log levels
 const LogLevel = {
   ERROR: 0,
   WARN: 1,
@@ -21,7 +21,7 @@ const LogLevel = {
   DEBUG: 3,
 };
 
-// 将字符串日志级别转换为数值
+// Convert string log level to numeric value
 function getLogLevelValue(level) {
   switch (level.toLowerCase()) {
     case "debug":
@@ -36,10 +36,10 @@ function getLogLevelValue(level) {
   }
 }
 
-// 设置默认日志级别为配置文件中的值
+// Set default log level from the configuration file
 let currentLogLevel = getLogLevelValue(config.logLevel || "error");
 
-// 日志函数
+// Logging function
 function log(level, message) {
   if (level <= currentLogLevel) {
     const prefix = Object.keys(LogLevel)[level];
@@ -181,7 +181,7 @@ async function main() {
     })
     .help().argv;
 
-  // 设置日志级别，优先使用命令行参数，其次使用配置文件
+  // Set log level, prioritize command line argument, then use configuration file
   currentLogLevel = getLogLevelValue(argv.logLevel);
 
   log(LogLevel.INFO, "Starting conversion process...");
