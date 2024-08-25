@@ -2,6 +2,7 @@
     "logseqPath": "/path/to/your/logseq/directory",
     "backupPath": "/path/to/your/backup/directory",
     "githubRepo": "https://github.com/yourusername/your-repo.git",
+    "logLevel": "INFO",
     "imageCompression": {
         "quality": 80,
         "lossless": false
@@ -11,5 +12,21 @@
         "keepOriginal": false,
         "concurrency": 5
     },
-    "logLevel": "error"
+    "cronJobs": [
+        {
+            "name": "github-backup",
+            "schedule": "0 3 * * 0",
+            "command": "github-backup.mjs"
+        },
+        {
+            "name": "convert-webp",
+            "schedule": "0 2 * * *",
+            "command": "convert-webp.mjs"
+        },
+        {
+            "name": "clean-empty-notes",
+            "schedule": "0 1 * * 0",
+            "command": "clean-empty-notes.mjs"
+        }
+    ]
 }
