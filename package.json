@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "convert-images": "node convert-webp.mjs",
-    "backup-github": "node github-backup.mjs"
+    "github-backup": "node github-backup.mjs"
   },
   "keywords": [],
   "author": "",
