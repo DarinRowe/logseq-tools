@@ -1,0 +1,19 @@
+{
+  "name": "logseq",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "convert-images": "node convert-webp.mjs",
+    "backup-github": "node github-backup.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "sharp": "^0.33.5",
+    "trash": "^9.0.0",
+    "yargs": "^17.7.2"
+  }
+}

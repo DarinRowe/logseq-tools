@@ -1,0 +1,15 @@
+{
+    "logseqPath": "/path/to/your/logseq/directory",
+    "backupPath": "/path/to/your/backup/directory",
+    "githubRepo": "https://github.com/yourusername/your-repo.git",
+    "imageCompression": {
+        "quality": 80,
+        "lossless": false
+    },
+    "webpConversion": {
+        "enabled": true,
+        "keepOriginal": false,
+        "concurrency": 5
+    },
+    "logLevel": "error"
+}
